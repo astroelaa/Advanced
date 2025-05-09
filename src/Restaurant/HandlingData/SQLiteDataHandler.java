@@ -68,32 +68,29 @@ public class SQLiteDataHandler {
                 String password = rs.getString("password");
                 String role = rs.getString("role");
                 
-                Users user = null;
-                
-                switch (role) {
+                Users user = null;                switch (role) {
                     case "Manager":
-                        user = new Manager(username, password);
+                        user = new Manager(username, username, password);
                         break;
                     case "Cooker":
-                        user = new Cooker(username, password);
+                        user = new Cooker(username, username, password);
                         break;
                     case "Waiter":
-                        user = new Waiter(username, password);
+                        user = new Waiter(username, username, password);
                         break;
                     case "Client":
-                        user = new Client(username, password, role);
+                        user = new Client(username, username, password);
                         break;
                     case "VipClient":
                         double discount = rs.getDouble("vip_discount");
-                        user = new VipClient(username, password, discount);
+                        user = new VipClient(username, username, password, (int)discount);
                         break;
                 }
-                
-                if (user != null) {
-                    // Set client table if applicable
-                    if (user instanceof Client && !rs.wasNull()) {
+                  if (user != null) {
+                    // Set client table if applicable                    if (user instanceof Client) {
                         int tableId = rs.getInt("table_id");
-                        if (tableId > 0) {
+                        // Only check rs.wasNull() right after getting the value
+                        if (!rs.wasNull() && tableId > 0) {
                             // We'll need to load tables later and assign them
                             // This is handled below in assignTablesToClients
                         }
@@ -131,14 +128,12 @@ public class SQLiteDataHandler {
         }
         
         return tables;
-    }
-
-    public static void assignTablesToClients(UsersVector users, TablesVector tables) {
+    }    public static void assignTablesToClients(UsersVector users, TablesVector tables) {
         try (Connection conn = DatabaseConnection.getConnection();
              Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT username, table_number FROM users " +
-                                            "JOIN tables ON users.table_id = tables.id " +
-                                            "WHERE role IN ('Client', 'VipClient')")) {
+             ResultSet rs = stmt.executeQuery("SELECT u.username, t.table_number FROM users u " +
+                                            "JOIN tables t ON u.table_id = t.id " +
+                                            "WHERE u.role IN ('Client', 'VipClient') AND u.table_id IS NOT NULL")) {
             
             while (rs.next()) {
                 String username = rs.getString("username");
