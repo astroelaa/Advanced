@@ -1,7 +1,9 @@
 package Main;
 
-import Restaurant.HandlingData.LoadData;
-import Restaurant.HandlingData.SaveData;import Restaurant.Properties.Food;
+import Restaurant.HandlingData.SaveData;
+import Restaurant.HandlingData.SQLiteDataHandler;
+import Restaurant.HandlingData.DatabaseConnection;
+import Restaurant.Properties.Food;
 import Restaurant.Useres.Clients.Client;
 import Restaurant.Useres.Clients.Order;
 import Restaurant.Useres.Cooker;
@@ -22,7 +24,7 @@ import RestaurantGUI.UsersGUI.WaiterGUI;
 import javafx.application.Application;
 import javafx.stage.Stage;
 
-import java.util.ArrayList; // Import ArrayList
+import java.util.ArrayList;
 import java.util.Vector;
 
 public class Main extends Application {
@@ -37,27 +39,57 @@ public class Main extends Application {
 
     @Override
     public void start(Stage primaryStage){
-        String path = "src\\Restaurant\\HandlingData\\data.xml";
-
-        //Loading data:
-        LoadData loadData = new LoadData(path);
-        loadData.loadData();
-
-        styleMode = loadData.getStyleMode();
-        usersVector = loadData.getUsers();
-        food = loadData.getFood();
-        tablesVector = loadData.getTables();
-        billsVector = loadData.getBills();
-        orders = new ArrayList<>(loadData.getOrders()); // Convert Vector to ArrayList
+        // Initialize and load data from SQLite database
+        try {
+            // Get database connection to initialize it
+            DatabaseConnection.getConnection();
+            
+            // Load data from SQLite
+            styleMode = SQLiteDataHandler.loadStyleMode();
+            usersVector = SQLiteDataHandler.loadUsers();
+            tablesVector = SQLiteDataHandler.loadTables();
+            food = SQLiteDataHandler.loadFood();
+            
+            // Assign tables to clients after loading both tables and users
+            SQLiteDataHandler.assignTablesToClients(usersVector, tablesVector);
+            
+            billsVector = SQLiteDataHandler.loadBills(usersVector);
+            orders = new ArrayList<>(SQLiteDataHandler.loadOrders(usersVector, food));
+        } catch (Exception e) {
+            System.err.println("Error initializing database: " + e.getMessage());
+            // Create empty data containers in case of error
+            styleMode = null;
+            usersVector = new UsersVector(25);
+            tablesVector = new TablesVector(25);
+            food = new Food(3, 25);
+            billsVector = new BillsVector(25);
+            orders = new ArrayList<>();
+        }
 
         if (styleMode == null)
             styleMode = new SetStyle().show();
 
-        //Initialize data saver:
-SaveData saver = new SaveData(path, styleMode, usersVector, tablesVector, food, billsVector, new Vector<>(orders));
-        //Go to login user interface:
+        // Keep backward compatibility with XML saver
+        String path = "src\\Restaurant\\HandlingData\\data.xml";
+        SaveData saver = new SaveData(path, styleMode, usersVector, tablesVector, food, billsVector, new Vector<>(orders));
+        
+        // Save data to SQLite as well
+        SQLiteDataHandler.saveAllData(styleMode, usersVector, tablesVector, food, billsVector, new Vector<>(orders));
+        
+        // Go to login user interface
         login = new Login(styleMode);
         login(saver, orders);
+    }
+
+    @Override
+    public void stop() {
+        // Close database connection when the application exits
+        try {
+            DatabaseConnection.closeConnection();
+            System.out.println("Database connection closed successfully");
+        } catch (Exception e) {
+            System.err.println("Error closing database connection: " + e.getMessage());
+        }
     }
 
     public void login(SaveData saver, ArrayList<Order> orders){
